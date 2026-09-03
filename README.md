@@ -14,10 +14,11 @@ One folder per challenge family, one folder per crown inside it:
 ```
 cf_autopilot/
   2026-09-03_uid-18_a1b2c3d4/
-    drone_agent.py
-    ... model weights ...
-    swarm_policy_contract.json
     CHAMPION.md
+    model/
+      drone_agent.py
+      ... model weights ...
+      swarm_policy_contract.json
 cf_search_and_rescue/
 cf_swarm_autopilot/
 cf_swarm_sar/
@@ -26,8 +27,10 @@ cf_interceptor_office/
 ```
 
 The folder name is the crowning date, the miner's UID, and the first eight characters of the
-archive's SHA-256. `CHAMPION.md` records the family, the miner's hotkey and UID, the score and the
-per-metric breakdown behind it, the crowning time, and the full digest of the archive.
+archive's SHA-256. `model/` is the submission exactly as the miner packed it and nothing else, so
+zipping it reproduces the digest. `CHAMPION.md` sits beside it and records the family, the miner's
+hotkey and UID, the score and the per-metric breakdown behind it, the crowning time, and the full
+digest of the archive.
 
 ## Releases
 
