@@ -36,12 +36,6 @@ This repository is where the champions live. The Swarm backend writes here the m
 promoted, and nothing is ever removed, so it is the complete lineage of every crown the subnet has
 had. Fork any of them. Improving a published champion is how most crowns are won.
 
-https://github.com/user-attachments/assets/ee579a55-5eb2-4f6c-83db-4b1a223b9bb2
-
-<p align="center">
-  <sub><b>Search and Rescue.</b> The mission Swarm is built around: teaching a drone to find people.</sub>
-</p>
-
 <p align="right">(<a href="#readme-top">back to top</a>)</p>
 
 ---
@@ -61,12 +55,6 @@ Every one of them has a folder here.
 | **[Search and Rescue](https://github.com/swarm-subnet/swarm/blob/main/docs/families/search_and_rescue.md)** | Find a lost person and hold a steady hover above them | <img src="https://img.shields.io/badge/15%25-F5D400?style=flat-square" alt="15%" /> |
 
 <p align="center"><sub><b>Solved:</b> <a href="https://github.com/swarm-subnet/swarm/blob/main/docs/families/interceptor.md">Interceptor</a> — open-terrain pursuit, cleared by its champion and closed. The crown is final and the winning model is preserved here.</sub></p>
-
-https://github.com/user-attachments/assets/a16e9453-663c-4483-a3b8-160c412fd3e7
-
-<p align="center">
-  <sub><b>Air-to-air pursuit,</b> from a real benchmark run: close the gap and catch a fleeing drone before the clock runs out.</sub>
-</p>
 
 <p align="right">(<a href="#readme-top">back to top</a>)</p>
 
@@ -97,19 +85,6 @@ archive's SHA-256. `model/` is the submission exactly as the miner packed it and
 zipping it reproduces the digest. `CHAMPION.md` sits beside it and records the mission, the miner's
 hotkey and UID, the score and the per-metric breakdown behind it, the crowning time, and the full
 digest of the archive.
-
-<table>
-<tr>
-<td align="center" width="50%">
-<img src="https://raw.githubusercontent.com/swarm-subnet/swarm/main/swarm/assets/Drone_flying.gif" alt="Drone navigating a procedural city" width="100%">
-<br><sub>Third-person view</sub>
-</td>
-<td align="center" width="50%">
-<img src="https://raw.githubusercontent.com/swarm-subnet/swarm/main/swarm/assets/Drone_flying_FPV.gif" alt="What the drone sees" width="100%">
-<br><sub>What the drone sees</sub>
-</td>
-</tr>
-</table>
 
 <p align="right">(<a href="#readme-top">back to top</a>)</p>
 
