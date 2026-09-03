@@ -75,11 +75,14 @@ https://github.com/user-attachments/assets/a16e9453-663c-4483-a3b8-160c412fd3e7
 <!-- LAYOUT -->
 ## Layout
 
-One folder per mission, one folder per crown inside it:
+[`CHAMPIONS.md`](CHAMPIONS.md) lists the reigning champion of every mission. One folder per
+mission, with its own README listing every crown, and one folder per crown inside it:
 
 ```
+CHAMPIONS.md                       the reigning champion of every mission
 cf_autopilot/
-  2026-09-03_uid-18_a1b2c3d4/
+  README.md                        the mission and its full lineage, newest first
+  uid18/
     CHAMPION.md
     model/
       drone_agent.py
@@ -88,14 +91,16 @@ cf_autopilot/
 cf_search_and_rescue/
 cf_swarm_autopilot/
 cf_swarm_sar/
-cf_interceptor/
+cf_interceptor/                    archived: the crown is final
 cf_interceptor_office/
 ```
 
-The folder name is the crowning date, the miner's UID, and the first eight characters of the
-archive's SHA-256. `model/` is the contents of the submitted archive and nothing else. `CHAMPION.md`
+The crown folder is named after the miner's UID; a UID that takes a second crown in the same mission
+gets `uid18-2`, so no crown ever replaces another. The crowning time is in the lineage table and in
+the commit. `model/` is the contents of the submitted archive and nothing else. `CHAMPION.md`
 sits beside it and records the mission, the miner's hotkey and UID, the score and the per-metric
-breakdown behind it, the crowning time, and the full digest of the archive.
+breakdown behind it, the crowning time, and the full digest of the archive. All of these pages are
+written by the backend on each crown.
 
 <p align="right">(<a href="#readme-top">back to top</a>)</p>
 
@@ -125,3 +130,21 @@ kings are documented in the [swarm](https://github.com/swarm-subnet/swarm) repos
 [`docs/king_of_the_hill.md`](https://github.com/swarm-subnet/swarm/blob/main/docs/king_of_the_hill.md).
 
 <p align="right">(<a href="#readme-top">back to top</a>)</p>
+
+---
+
+<!-- LICENSE -->
+## License
+
+Distributed under the MIT License. See [LICENSE](LICENSE) for details.
+
+---
+
+<p align="center">
+  <img src="https://raw.githubusercontent.com/swarm-subnet/swarm/main/swarm/assets/Swarm.png" alt="Swarm" width="60">
+</p>
+
+<p align="center">
+  <b><a href="https://swarm124.com">Swarm</a>: where AI learns to fly.</b><br/>
+  <sub>Subnet 124 on <a href="https://bittensor.com">Bittensor</a></sub>
+</p>
