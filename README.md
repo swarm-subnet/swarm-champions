@@ -36,12 +36,6 @@ Each crown also has a GitHub Release, tagged `<family>-uid<uid>-<hash8>`, with t
 and the digest the miner committed on-chain, so anyone can check that what is published is what was
 scored.
 
-## Who writes here
-
-Commits are made by the subnet's publishing app, authenticated with a short-lived token minted per
-run. It writes new crown folders and creates their Releases; it never modifies or deletes anything
-already published. There are no manual commits.
-
 ## How a model gets here
 
 Miners submit privately: the model goes to the Swarm backend, where it stays unpublished while it is
