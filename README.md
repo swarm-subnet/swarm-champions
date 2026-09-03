@@ -93,10 +93,9 @@ cf_interceptor_office/
 ```
 
 The folder name is the crowning date, the miner's UID, and the first eight characters of the
-archive's SHA-256. `model/` is the submission exactly as the miner packed it and nothing else, so
-zipping it reproduces the digest. `CHAMPION.md` sits beside it and records the mission, the miner's
-hotkey and UID, the score and the per-metric breakdown behind it, the crowning time, and the full
-digest of the archive.
+archive's SHA-256. `model/` is the contents of the submitted archive and nothing else. `CHAMPION.md`
+sits beside it and records the mission, the miner's hotkey and UID, the score and the per-metric
+breakdown behind it, the crowning time, and the full digest of the archive.
 
 <p align="right">(<a href="#readme-top">back to top</a>)</p>
 
