@@ -1,0 +1,245 @@
+{
+  "model_graph_version": "model_graph.v1",
+  "family_id": "cf_autopilot",
+  "execution_profile": "swarm.onnx-neural.cpu.v1",
+  "runner_abi": "graph_runner.v1",
+  "models": [
+    {
+      "id": "prep",
+      "file": "prep.onnx",
+      "sha256": "8ada45ec14483d933c5b76a3ff25e2cf6b51daa86b589a27d807b9f2396514fc"
+    },
+    {
+      "id": "eye",
+      "file": "eye_detector.onnx",
+      "sha256": "87325de98ab1f3a3235c02d9c59b078b56dafe6b38a97ca11392ac6410513302"
+    },
+    {
+      "id": "mnew",
+      "file": "mnew.onnx",
+      "sha256": "f49c1fe6b7e79834446c638c8259662cbe6bd0b886f11f274d7599fecad69ef8"
+    },
+    {
+      "id": "pt",
+      "file": "pt.onnx",
+      "sha256": "7f8766ebb96c9fc6f374bf646f63fcc49754ca741c479f94d0d1b5cf7135eeac"
+    },
+    {
+      "id": "main_a",
+      "file": "main_a.onnx",
+      "sha256": "7ac631602bf9a7549a98cfb60b2b666276e7354a2a7476d3994e955cf4981b00"
+    },
+    {
+      "id": "nav",
+      "file": "nav.onnx",
+      "sha256": "2e263300875041a9a00b51be88bce60cdffd346757ba19f06e4084ae66bd51aa"
+    },
+    {
+      "id": "tail",
+      "file": "tail.onnx",
+      "sha256": "49daf1a3dd4ab83b74128e2c93bcfc4451dd3b6acc405caefd40041cc93f76f5"
+    },
+    {
+      "id": "forest_a",
+      "file": "forest_a.onnx",
+      "sha256": "e6eb92312251002c25cc9367f6ead40eec76bb2d945e3f7f0783fd6473f240b8"
+    },
+    {
+      "id": "arbiter",
+      "file": "arbiter.onnx",
+      "sha256": "84fba85396f2a86c08f6e01144cab37457e7799260edd7eded17eef54ae0c281"
+    }
+  ],
+  "memory": [
+    {
+      "name": "main_pre",
+      "shape": [
+        226
+      ],
+      "writer": "main_a.pre_next"
+    },
+    {
+      "name": "main_post",
+      "shape": [
+        23
+      ],
+      "writer": "main_b.post_next"
+    },
+    {
+      "name": "main_buf",
+      "shape": [
+        169,
+        3
+      ],
+      "writer": "main_a.buf_next"
+    },
+    {
+      "name": "forest_pre",
+      "shape": [
+        226
+      ],
+      "writer": "forest_a.pre_next"
+    },
+    {
+      "name": "forest_post",
+      "shape": [
+        23
+      ],
+      "writer": "forest_b.post_next"
+    },
+    {
+      "name": "forest_buf",
+      "shape": [
+        169,
+        3
+      ],
+      "writer": "forest_a.buf_next"
+    },
+    {
+      "name": "router",
+      "shape": [
+        8
+      ],
+      "writer": "main_a.router_next"
+    },
+    {
+      "name": "ptM",
+      "shape": [
+        7,
+        31
+      ],
+      "writer": "main_a.ptM_next"
+    },
+    {
+      "name": "mnewM",
+      "shape": [
+        7,
+        31
+      ],
+      "writer": "forest_a.mnewM_next"
+    }
+  ],
+  "nodes": [
+    {
+      "id": "prep",
+      "model": "prep",
+      "inputs": {
+        "depth": "obs.depth",
+        "state": "obs.state",
+        "mnewM": "memory.mnewM"
+      }
+    },
+    {
+      "id": "eye",
+      "model": "eye",
+      "inputs": {
+        "depth": "prep.d_nchw"
+      }
+    },
+    {
+      "id": "mnew",
+      "model": "mnew",
+      "inputs": {
+        "depth": "prep.d_nhwc",
+        "state": "prep.state_b",
+        "M": "prep.mnew_M"
+      }
+    },
+    {
+      "id": "pt",
+      "model": "pt",
+      "inputs": {
+        "depth": "prep.d_nhwc",
+        "state": "prep.state_b",
+        "cam_pos": "prep.cam_pos",
+        "cam_tgt": "prep.cam_tgt",
+        "M": "memory.ptM"
+      }
+    },
+    {
+      "id": "main_a",
+      "model": "main_a",
+      "inputs": {
+        "state": "obs.state",
+        "eye_out": "eye.out",
+        "pt_pred": "pt.prediction",
+        "pt_M_out": "pt.M_out",
+        "feats": "prep.feats",
+        "rays": "prep.rays",
+        "proj": "prep.proj",
+        "lateral": "prep.lateral",
+        "m_pre": "memory.main_pre",
+        "m_post": "memory.main_post",
+        "m_buf": "memory.main_buf",
+        "router": "memory.router",
+        "ptM_prev": "memory.ptM"
+      }
+    },
+    {
+      "id": "nav_m",
+      "model": "nav",
+      "inputs": {
+        "depth": "prep.d_nchw",
+        "action": "main_a.action_safe"
+      }
+    },
+    {
+      "id": "main_b",
+      "model": "tail",
+      "inputs": {
+        "seam": "main_a.seam",
+        "nav_out": "nav_m.new_action",
+        "nav_hatt": "nav_m.is_hatt",
+        "m_post": "memory.main_post",
+        "row": "main_a.row_main"
+      }
+    },
+    {
+      "id": "forest_a",
+      "model": "forest_a",
+      "inputs": {
+        "state": "obs.state",
+        "mnew_pred": "mnew.prediction",
+        "mnew_M_out": "mnew.M_out",
+        "feats": "prep.feats",
+        "rays": "prep.rays",
+        "proj": "prep.proj",
+        "lateral": "prep.lateral",
+        "f_pre": "memory.forest_pre",
+        "f_post": "memory.forest_post",
+        "f_buf": "memory.forest_buf",
+        "mnewM_prev": "memory.mnewM",
+        "gates": "main_a.row_forest"
+      }
+    },
+    {
+      "id": "nav_f",
+      "model": "nav",
+      "inputs": {
+        "depth": "prep.d_nchw",
+        "action": "forest_a.action_safe"
+      }
+    },
+    {
+      "id": "forest_b",
+      "model": "tail",
+      "inputs": {
+        "seam": "forest_a.seam",
+        "nav_out": "nav_f.new_action",
+        "nav_hatt": "nav_f.is_hatt",
+        "m_post": "memory.forest_post",
+        "row": "main_a.row_forest"
+      }
+    },
+    {
+      "id": "arbiter",
+      "model": "arbiter",
+      "inputs": {
+        "action_main": "main_b.action",
+        "action_forest": "forest_b.action",
+        "router": "memory.router"
+      }
+    }
+  ],
+  "action": "arbiter.action"
+}
