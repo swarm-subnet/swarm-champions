@@ -1,0 +1,9 @@
+{
+  "maps": [
+    "village",
+    "forest"
+  ],
+  "schema": "uid134.goalposterior.map_selection.v1",
+  "selection_rule": "village from uid36; forest added on two independent panels (+0.0169, +0.0602) matching their own +0.0357; open excluded, measured -0.1726",
+  "source_manifest_sha256": "19bae8110ec5222d9704e982a22f1af88a610fb68d7c526fbb5b8142d56536d2"
+}
