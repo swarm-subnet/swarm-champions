@@ -1,0 +1,8 @@
+{
+  "maps": [
+    "village"
+  ],
+  "schema": "uid134.goalposterior.map_selection.v1",
+  "selection_rule": "fresh40 Village lower95 positive; independent confirm60 preregistered",
+  "source_manifest_sha256": "19bae8110ec5222d9704e982a22f1af88a610fb68d7c526fbb5b8142d56536d2"
+}
