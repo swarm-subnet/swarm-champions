@@ -9,4 +9,4 @@ The reigning champion of every mission. Each mission folder lists the kings it p
 | Swarm Autopilot | 2026-09-04 | 167 | 0.6248 | [94c7d894](cf_swarm_autopilot/uid167/model/) | [submission.zip](https://github.com/swarm-subnet/swarm-champions/releases/tag/cf_swarm_autopilot-uid167-94c7d894) |
 | Swarm Search and Rescue | 2026-09-03 | 184 | 0.9206 | [a9ac17fe](cf_swarm_sar/uid184/model/) | [submission.zip](https://github.com/swarm-subnet/swarm-champions/releases/tag/cf_swarm_sar-uid184-a9ac17fe) |
 | Interceptor (archived) | 2026-08-21 | 236 | 0.9992 | [560df392](cf_interceptor/uid236/model/) | [submission.zip](https://github.com/swarm-subnet/swarm-champions/releases/tag/cf_interceptor-uid236-560df392) |
-| Interceptor Office | 2026-09-08 | 24 | 0.9683 | [dfe9a6e9](cf_interceptor_office/uid24/model/) | [submission.zip](https://github.com/swarm-subnet/swarm-champions/releases/tag/cf_interceptor_office-uid24-dfe9a6e9) |
+| Interceptor Office | 2026-09-09 | 177 | 0.9757 | [8b6dcc6d](cf_interceptor_office/uid177/model/) | [submission.zip](https://github.com/swarm-subnet/swarm-champions/releases/tag/cf_interceptor_office-uid177-8b6dcc6d) |
