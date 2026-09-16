@@ -1,0 +1,22 @@
+{
+ "src": "/workspace/swarm/Submission/extracted/champion_LATEST_UID204",
+ "ckpt": "/workspace/swarm/runs/pad_v2/fneg55/step_20000.pt",
+ "checker": "/workspace/swarm/runs/pad_v2/fneg55/checker.npz",
+ "score_thr": 0.9,
+ "forest_heat_thr": -1.0,
+ "slot_thr": [],
+ "overrides": {
+  "commit_t_skip": [
+   "forest",
+   "village",
+   "mountain"
+  ]
+ },
+ "ckpt_step": 20000,
+ "size_mb": 24.12,
+ "sha256": {
+  "team/out/ours/best.onnx": "14fe02614c445887a1300cdb014011beae073135ceae7c06d686f642c5a3ede2",
+  "team/out/ours/best.pt": "c8cbbcc98adb53f477c5508e5a540a945635fc39e547c8f216785e30f823397a",
+  "team/out/ours/checker.npz": "b3122ed7f373a9f1ba577ae7398c9c50839f457d2c63c7616f0ded2a4c366411"
+ }
+}
