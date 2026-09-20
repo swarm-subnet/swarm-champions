@@ -1,0 +1,972 @@
+import os
+from pathlib import Path
+import math
+import numpy as np
+import onnxruntime as ort
+_H=Path(__file__).resolve().parent
+ON=os.environ.get('KT_ON','1')=='1'
+AV_D=4.0
+AV_REL=0.7
+AV_ROT=45.0
+AV_HOLD=15
+AV_T0=100
+AV_TYPES=('forest','city')
+FG_ON=os.environ.get('KT_FG','1')=='1'
+SS_ON=os.environ.get('KT_SS','1')=='1'; SS_Z=float(os.environ.get('KT_SS_Z','0.3'))
+SS_LIFT=float(os.environ.get('KT_SS_LIFT','0.15')); SS_VZ=float(os.environ.get('KT_SS_VZ','0.2'))
+SS_FRAC=float(os.environ.get('KT_SS_FRAC','0.5')); SS_MIN_HEAD=int(os.environ.get('KT_SS_MIN_HEAD','4'))
+SS_HOR=float(os.environ.get('KT_SS_HOR','1.5')); SS_OUT=float(os.environ.get('KT_SS_OUT','1.3'))
+SS_OUT_V=float(os.environ.get('KT_SS_OUT_V','0.3')); SS_MAXT=int(os.environ.get('KT_SS_MAXT','450'))
+SS_F0=float(os.environ.get('KT_SS_F0','0.3')); SS_SIDE=float(os.environ.get('KT_SS_SIDE','90'))
+SS_TOP=float(os.environ.get('KT_SS_TOP','0.55')); SS_HMAX=float(os.environ.get('KT_SS_HMAX','1.0'))
+MX_ON=os.environ.get('KT_MX','1')=='1'; MX_AT=float(os.environ.get('KT_MX_AT','28')); MX_EXT=int(os.environ.get('KT_MX_EXT','70'))
+MX_TYPES=tuple(x for x in os.environ.get('KT_MX_TYPES','warehouse,city').split(',') if x)
+P3_ON=os.environ.get('KT_P3','1')=='1'; P3_T=int(os.environ.get('KT_P3_T','1000')); P3_BAN_R=float(os.environ.get('KT_P3_BAN_R','3.0'))
+FG_PH=tuple(int(x) for x in os.environ.get('KT_FG_PH','3').split(','))
+FG_D=float(os.environ.get('KT_FG_D','3.5')); FG_D2=float(os.environ.get('KT_FG_D2','3.0'))
+FG_W=float(os.environ.get('KT_FG_W','0.45')); FG_ROWS=int(os.environ.get('KT_FG_ROWS','18'))
+FG_MINH=float(os.environ.get('KT_FG_MINH','1.5')); FG_HOLD=int(os.environ.get('KT_FG_HOLD','20'))
+FG_V=float(os.environ.get('KT_FG_V','1.5')); FG_DN=float(os.environ.get('KT_FG_DN','0.02')); FG_TURN=float(os.environ.get('KT_FG_TURN','5'))
+FG_MAXB=float(os.environ.get('KT_FG_MAXB','40'))
+FG_ALAT=float(os.environ.get('KT_FG_ALAT','3.0')); FG_TILT=float(os.environ.get('KT_FG_TILT','25'))
+STALL_N=int(os.environ.get('KT_STALL_N','150'))        # stalled ticks before the lookahead fires (0 = off)
+STALL_V=float(os.environ.get('KT_STALL_V','0.8'))   # horizontal speed under which a tick counts as stalled
+STALL_LOOK=float(os.environ.get('KT_STALL_LOOK','15.0'))  # push the clue to the first waypoint this far ahead
+STALL_HOLD=int(os.environ.get('KT_STALL_HOLD','100'))     # ticks the push stays engaged
+STALL_TYPES=tuple(t for t in os.environ.get('KT_STALL_TYPES','mountain').split(',') if t)
+CFG={
+ 'forest':   (350,15,1000000000.0,8.0,5.0,40,120,8.0,0,0.75),
+ 'city':     (450,25,10.0,6.0,5.0,40,250,4.5,1),
+ 'mountain': (450, 15, 1000000000.0, 12.0, 8.0, 25, 120, 8.0, 0, 0.75),
+ 'village':  (450,15,10.0,8.0,5.0,40,120,8.0,0,0.75),
+}
+MTN_STRONG=(450,15,1000000000.0,12.0,8.0,25,120,8.0,0,0.75)
+MTN_THR=0.5
+FF_ON=os.environ.get('KT_FF','1')=='1'
+FF_TYPES=tuple(t for t in os.environ.get('KT_FF_TYPES','forest').split(',') if t)
+FF_FRACS=(0.9,0.8,0.7,0.6,0.5,0.4,0.3)
+RL_ON=os.environ.get('KT_RL','1')=='1'; RL_N=int(os.environ.get('KT_RL_N','40')); RL_BAR=float(os.environ.get('KT_RL_BAR','0.55'))
+RL_TYPES=tuple(t for t in os.environ.get('KT_RL_TYPES','city,forest').split(',') if t)
+LADDER=os.environ.get('KT_LADDER','1')=='1'
+TYPES=tuple(t for t in os.environ.get('KT_TYPES','forest,village,city,mountain').split(',') if t)
+LB=('city','open','mountain','village','warehouse','forest')
+SIM_DT=0.02
+VW=float(os.environ.get('KT_VETO_WARM','0.02'))
+RP_ON=os.environ.get('KT_RP','1')=='1'
+RP_T=float(os.environ.get('KT_RP_T','0.713'))
+RP_HMAX=float(os.environ.get('KT_RP_HMAX','1.0'))
+RP_T0=150; RP_EVERY=75; RP_CAP=40; RP_CHASE_MIN=12; RP_CHASE_TICKS=36
+RP_RANGE_MAX=20.0; RP_IMG_MAX=29.0; RP_CLUE_R=55.0; RP_LATCH_N=2; RP_LATCH_TOL=5.0; RP_EMA=0.3
+RP_TERM_R=6.0; RP_HOVER_UP=3.2; RP_DUD_TICKS=300; RP_AGL_MIN=2.0; RP_RING=1.6; RP_TERM_MAX=1200
+_DMIN,_DMAX=0.5,30.0; _CAMF,_CAMU,_HT=0.13,0.05,1.0
+def _sig(x):
+ return 1.0/(1.0+math.exp(-max(-40.0,min(40.0,float(x)))))
+def _axes(rpy):
+ r,p,y=(float(rpy[0]),float(rpy[1]),float(rpy[2]))
+ cr,sr,cp,sp,cy,sy=(math.cos(r),math.sin(r),math.cos(p),math.sin(p),math.cos(y),math.sin(y))
+ fwd=np.array([cy*cp,sy*cp,-sp],np.float64); up=np.array([cy*sp*cr+sy*sr,sy*sp*cr-cy*sr,cp*cr],np.float64)
+ return fwd,up,np.cross(fwd,up)
+def _mworld(u,v,cz,pos,rpy):
+ fwd,up,right=_axes(rpy); cam=np.asarray(pos,np.float64)+fwd*_CAMF+up*_CAMU
+ return cam+right*(u*_HT*cz)+up*(v*_HT*cz)+fwd*cz
+CHAMP_ROUTE=os.environ.get('KT_CHAMP_ROUTE','1')=='1'  # village/warehouse -> UID_169's process end to end
+ESC_TERR=os.environ.get('KT_ESC_TERR','1')=='1'        # escape acts ONLY on positively-latched mountain/forest
+ESC_ON=os.environ.get('KT_ESC','1')=='1'; ESC_TRAP_M=float(os.environ.get('KT_ESC_TRAP','1.0')); ESC_FREE_M=3.0; ESC_DIST=float(os.environ.get('KT_ESC_DIST','2.0'))
+# Low-shelf spawn escape. The sim's start-pad check ignores bodies under 1 m tall and probes only 0.45 m up, so the
+# drone can spawn under a rack's lowest shelf; the policy's blind vertical climb hits it within ~16 ticks.
+WESC_ON=os.environ.get('KT_WESC','1')=='1'; WESC_FRAC=float(os.environ.get('KT_WESC_FRAC','0.5'))
+WESC_H=float(os.environ.get('KT_WESC_H','0.45')); WESC_HOR=float(os.environ.get('KT_WESC_HOR','1.0'))
+WESC_Z=float(os.environ.get('KT_WESC_Z','0.3')); WESC_MODE=os.environ.get('KT_WESC_MODE','side')
+WESC_BACK=float(os.environ.get('KT_WESC_BACK','1.2')); WESC_TOP=float(os.environ.get('KT_WESC_TOP','1.2'))
+WESC_SIDE_M=float(os.environ.get('KT_WESC_SIDE_M','0.6')); WESC_SIDE_SPEED=float(os.environ.get('KT_WESC_SIDE_SPEED','0.2')); WESC_SIDE_MAX=float(os.environ.get('KT_WESC_SIDE_MAX','1.0'))
+ESC_SPEED=0.3; ESC_CLIMB=0.6; ESC_AGL_TARGET=2.5; ESC_MAX_CREEP=300; ESC_MARGIN=1.0; ESC_BODY_M=1.2; ESC_MAX_CLIMB=150; ESC_CLEAR_TICKS=10; ESC_CREEP_AGL=0.28; ESC_SCAN_TICKS=45
+class _Escape:
+ def __init__(self):
+  self.reset()
+ def reset(self):
+  self.mode=None; self.dist=0.0; self.phase=None; self.heading=None; self.start=None; self.clear=0; self.n=0; self.trap=False; self.cycles=0; self.climb_start=None; self.yaw0=0.0; self.scan_i=0; self.scan_n=0; self.margin_start=None; self.guard_hits=0
+ def opening(self,depth,yaw):
+  d=np.asarray(depth,np.float32).reshape(256,256)*(_DMAX-_DMIN)+_DMIN
+  bands=[float(d[112:128,c0:c0+52].min()) for c0 in (0,51,102,153,204)]
+  best=max(bands); k=min((i for i in range(5) if bands[i]>=best-0.05), key=lambda i: abs(i-2))
+  if bands[k]<ESC_FREE_M:
+   return None
+  return float(yaw)-math.radians((k-2)*18.0)
+ def _back(self):
+  return self.mode=='ceil' and WESC_MODE in ('back','side')
+ def _yawcmd(self):
+  h=self.yaw0 if (self._back() or self.heading is None) else self.heading
+  return float(((h+math.pi)%(2*math.pi)-math.pi)/math.pi)
+ def _scan_seq(self):
+  return (180.0,90.0,-90.0) if self.mode=='ceil' else (90.0,-90.0,180.0)
+ def _open(self,depth,yaw):
+  if self.mode!='ceil':
+   return self.opening(depth,yaw)
+  # ceiling mode: an opening must also be clear overhead in the same columns (not just along the shelf)
+  d=np.asarray(depth,np.float32).reshape(256,256)*(_DMAX-_DMIN)+_DMIN
+  bands=[(float(d[112:128,c0:c0+52].min()),float(d[0:64,c0:c0+52].min())) for c0 in (0,51,102,153,204)]
+  ok=[i for i in range(5) if bands[i][0]>=ESC_FREE_M and bands[i][1]>=WESC_TOP]
+  if not ok:
+   return None
+  k=min(ok,key=lambda i:(abs(i-2),-bands[i][0]))
+  return float(yaw)-math.radians((k-2)*18.0)
+ def _side(self,d,yaw):
+  # Ground truth (ovh_probe): the trap is a ~0.4-0.8 m rack beam 0.64 m up, directly overhead and running along the view,
+  # so its underside fills the centre columns of the upper image. Step sideways toward the nearer beam edge, taken as the
+  # lateral offset y=u*depth of the outermost contiguous low-ceiling pixel (5/5 correct vs ray ground truth). No yaw: on the
+  # floor the drone turns ~25 deg per second, which is what ran the scan mode out of time.
+  v=(128.0-np.arange(96)-0.5)/128.0; u=(np.arange(256)+0.5-128.0)/128.0
+  up=d[0:96]; low=((up*v[:,None])<1.0)&(up<3.0)
+  el=[]; er=[]
+  for r in range(0,96,4):
+   row=low[r]
+   if not row[124:132].any():
+    continue
+   jl=128
+   while jl>0 and row[jl-1]:
+    jl-=1
+   jr=127
+   while jr<255 and row[jr+1]:
+    jr+=1
+   el.append(-float(u[jl])*float(d[r,jl])); er.append(float(u[jr])*float(d[r,jr]))
+  if el:
+   l=float(np.median(el)); rr=float(np.median(er)); e=min(l,rr)
+  else:
+   l=float(low[:,0:96].sum()); rr=float(low[:,160:256].sum()); e=0.4
+  right=rr<l
+  dist=float(min(WESC_SIDE_MAX,max(0.6,e+WESC_SIDE_M)))
+  return float(yaw)+(-0.5*math.pi if right else 0.5*math.pi),dist
+ def ceiling(self,depth,pos,yaw):
+  if float(pos[2])>WESC_Z:
+   return False
+  d=np.asarray(depth,np.float32).reshape(256,256)*(_DMAX-_DMIN)+_DMIN
+  v=(128.0-np.arange(96)-0.5)/128.0
+  up=d[0:96,96:160]; hup=up*v[:,None]; near=up<3.0
+  if not near.any():
+   return False
+  frac=float(((hup<1.0)&near).mean()); hmed=float(np.median(hup[near])); hor=float(np.median(d[96:128,96:160]))
+  if frac<WESC_FRAC or hmed>WESC_H or hor>WESC_HOR:
+   return False
+  self.trap=True; self.mode='ceil'; self.start=np.asarray(pos[0:2],np.float64).copy(); self.yaw0=float(yaw)
+  if WESC_MODE=='side':
+   self.heading,self.dist=self._side(d,yaw); self.phase='creep'; return True
+  if WESC_MODE=='back':
+   self.heading=float(yaw)+math.pi; self.phase='creep'; return True
+  h=self._open(depth,yaw)
+  if h is not None:
+   self.heading=h; self.phase='creep'; return True
+  self.phase='scan'; self.scan_i=0; self.scan_n=0; return True
+ def decide(self,depth,pos,yaw):
+  d=np.asarray(depth,np.float32).reshape(256,256)*(_DMAX-_DMIN)+_DMIN
+  if float((d[0:16]<0.8).mean())<0.95:
+   return False
+  self.trap=True; self.start=np.asarray(pos[0:2],np.float64).copy(); self.yaw0=float(yaw)
+  h=self.opening(depth,yaw)
+  if h is not None:
+   self.heading=h; self.phase='creep'; return True
+  self.phase='scan'; self.scan_i=0; self.scan_n=0; return True
+ def act(self,depth,pos,agl,pitch_deg,yaw):
+  self.n+=1
+  d=np.asarray(depth,np.float32).reshape(256,256)*(_DMAX-_DMIN)+_DMIN
+  top=float(d[0:64].min())
+  if self.phase=='scan':
+   tgt=self.yaw0+math.radians(self._scan_seq()[self.scan_i]); self.scan_n+=1
+   err=(yaw-tgt+math.pi)%(2*math.pi)-math.pi
+   if abs(err)<math.radians(8.0) or self.scan_n>=ESC_SCAN_TICKS:
+    h=self._open(depth,yaw) if abs(err)<math.radians(12.0) else None
+    if h is not None:
+     self.heading=h; self.phase='creep'; self.n=0; self.clear=0; self.start=np.asarray(pos[0:2],np.float64).copy()
+     return np.array([math.cos(h),math.sin(h),0.0],np.float32),ESC_SPEED,(self._yawcmd() if self.mode=='ceil' else None)
+    self.scan_i+=1; self.scan_n=0
+    if self.scan_i>=3:
+     self.phase='done'; return None
+    tgt=self.yaw0+math.radians(self._scan_seq()[self.scan_i])
+   yt=(tgt+math.pi)%(2*math.pi)-math.pi
+   return np.zeros(3,np.float32),0.0,float(yt/math.pi)
+  if self.phase=='creep':
+   self.clear=self.clear+1 if (top>=2.0 and abs(pitch_deg)<6.0) else 0
+   trav=float(np.linalg.norm(np.asarray(pos[0:2],np.float64)-self.start))
+   if self.clear>=ESC_CLEAR_TICKS and self.margin_start is None:
+    self.margin_start=np.asarray(pos[0:2],np.float64).copy()
+   past=(self.margin_start is not None and float(np.linalg.norm(np.asarray(pos[0:2],np.float64)-self.margin_start))>=ESC_MARGIN)
+   rel=(self.heading-yaw+math.pi)%(2*math.pi)-math.pi
+   kb=min(4,max(0,int(round(2-math.degrees(rel)/18.0)))); c0=(0,51,102,153,204)[kb]
+   if float(d[100:128,c0:c0+52].min())<ESC_BODY_M and self.n>15 and self.guard_hits<3 and not self._back():
+    self.guard_hits+=1; self.phase='scan'; self.scan_i=0; self.scan_n=0; self.yaw0=float(yaw); self.clear=0; self.margin_start=None
+    return np.zeros(3,np.float32),0.0,None
+   if self.mode=='ceil' and WESC_MODE=='side' and (trav>=self.dist or self.n>=ESC_MAX_CREEP):
+    self.phase='done'; return None
+   if (past and not (self.mode=='ceil' and WESC_MODE=='side')) or self.n>=ESC_MAX_CREEP or (WESC_MODE=='back' and self._back() and trav>=WESC_BACK):
+    self.phase='climb'; self.n=0; self.climb_start=np.asarray(pos[0:2],np.float64).copy()
+   else:
+    vz=float(np.clip((ESC_CREEP_AGL-agl)*3.0,-0.5,0.5))
+    v=np.array([math.cos(self.heading),math.sin(self.heading),vz],np.float64); v/=max(1e-6,float(np.linalg.norm(v)))
+    return v.astype(np.float32),(WESC_SIDE_SPEED if (self.mode=='ceil' and WESC_MODE=='side') else ESC_SPEED),(self._yawcmd() if self.mode=='ceil' else None)
+  if self.phase=='climb':
+   if agl>=ESC_AGL_TARGET or self.n>=ESC_MAX_CLIMB:
+    self.phase='done'; return None
+   if top<0.9 and agl<1.0 and self.cycles<2:
+    self.cycles+=1; self.phase='creep'; self.n=0; self.clear=0; self.margin_start=None; self.start=np.asarray(pos[0:2],np.float64).copy()
+    return np.array([math.cos(self.heading),math.sin(self.heading),0.0],np.float32),ESC_SPEED,(self._yawcmd() if self.mode=='ceil' else None)
+   return np.array([0.0,0.0,1.0],np.float32),ESC_CLIMB,(self._yawcmd() if self.mode=='ceil' else None)
+  return None
+R2_ON=os.environ.get('KT_R2','1')=='1'
+R2_TYPES=tuple(t for t in os.environ.get('KT_R2_TYPES','forest,warehouse,village').split(',') if t in LB)
+R2_T=float(os.environ.get('KT_R2_T','0.65'))
+R2_BAR=float(os.environ.get('KT_R2_BAR','0.5'))
+R2_HMAX=float(os.environ.get('KT_R2_HMAX','inf'))
+R2_RANGE_MAX=float(os.environ.get('KT_R2_RANGE_MAX','25.0'))
+R2_CAP=int(os.environ.get('KT_R2_CAP',str(RP_CAP-3)))
+R2_TERM_R=float(os.environ.get('KT_R2_TERM_R','6.0'))
+R2_TERM_TYPES=tuple(os.environ.get('KT_R2_TERM_TYPES','forest,village,warehouse').split(','))
+R2_FACE=os.environ.get('KT_R2_FACE','1')=='1'; R2_FACE_TYPES=tuple(os.environ.get('KT_R2_FACE_TYPES','forest').split(','))
+R2_FACE_CLR=float(os.environ.get('KT_R2_FACE_CLR','2.0'))
+R2_TERM_P1=os.environ.get('KT_R2_TERM_P1','1')=='1'; R2_TERM_WAIT=int(os.environ.get('KT_R2_TERM_WAIT','100'))
+MTN_Z0=float(os.environ.get('KT_MTN_Z0','13.0'))
+class _R2Off(Exception):
+ pass
+def _ss_frac(depth):
+ d=np.asarray(depth,np.float32).reshape(256,256)*(_DMAX-_DMIN)+_DMIN
+ v=(1.0-(np.arange(85)+0.5)/128.0)[:,None]
+ top=d[0:85,64:192]; h=top*v
+ frac=float(((h>0.15)&(h<1.0)&(top<1.2)).mean())
+ hor=float(np.median(d[112:136,96:160]))
+ return frac,hor
+def _ss_top(depth):
+ d=np.asarray(depth,np.float32).reshape(256,256)[0:40,64:192]*(_DMAX-_DMIN)+_DMIN
+ return float(np.median(d))
+def _wrap(a):
+ return (a+math.pi)%(2*math.pi)-math.pi
+class _RgbPrimary:
+ def __init__(self,model='victim_rgb_m.onnx',in_res=128,thr=None,hmax=None,rng_max=None,term_r=None,cap=None):
+  self.sess=None; self._tried=False
+  self.model=model; self.in_res=int(in_res)
+  self.thr=thr if thr is None else float(thr)
+  self.hmax=RP_HMAX if hmax is None else float(hmax)
+  self.rng_max=RP_RANGE_MAX if rng_max is None else float(rng_max)
+  self.term_r=RP_TERM_R if term_r is None else float(term_r)
+  self.cap=RP_CAP if cap is None else int(cap)
+  self.reset()
+ def _load(self):
+  self._tried=True
+  try:
+   so=ort.SessionOptions(); so.intra_op_num_threads=1; so.inter_op_num_threads=1
+   self.sess=ort.InferenceSession(str(_H/self.model),so,providers=['CPUExecutionProvider']); self.iname=self.sess.get_inputs()[0].name
+  except Exception:
+   self.sess=None
+ def reset(self):
+  self.n_req=0; self.last_req=-10**9; self.hit_t=-10**9; self.hits=[]; self.latch=None; self.near_since=None; self.bad=[]; self.clue0=None
+  self.n_fix=0; self.n_latch=0; self.n_dud=0; self.latch_t=None
+ def score(self,rgb):
+  fr=np.asarray(rgb,np.float32)
+  if self.sess is None or fr.size!=256*256*3 or float(np.mean(np.abs(fr)))<0.005:
+   return None
+  if self.in_res==256:
+   r=np.ascontiguousarray(fr.reshape(256,256,3),np.float32)
+  else:
+   r=np.ascontiguousarray(fr.reshape(256,256,3).reshape(128,2,128,2,3).mean(axis=(1,3)),np.float32)
+  o=np.asarray(self.sess.run(None,{self.iname:r})[0],np.float32).reshape(5)
+  return _sig(o[0]),float(o[1]),float(o[2]),float(o[4])
+ def localise(self,u,v,depth,pos,rpy):
+  d=np.asarray(depth,np.float32).reshape(256,256)
+  px=min(255,max(0,int(round((u+1.0)*0.5*256-0.5)))); py=min(255,max(0,int(round((1.0-v)*0.5*256-0.5))))
+  cz=float(np.median(d[max(0,py-2):py+3,max(0,px-2):px+3]))*(_DMAX-_DMIN)+_DMIN
+  if cz>RP_IMG_MAX or cz>self.rng_max:
+   return None
+  q=_mworld(u,v,cz,pos,rpy)
+  if not np.all(np.isfinite(q)):
+   return None
+  if self.clue0 is not None and float(np.linalg.norm(q[0:2]-self.clue0))>RP_CLUE_R:
+   return None
+  if not (-25.0<=float(q[2]-pos[2])<=1.0):
+   return None
+  for b in self.bad:
+   if float(np.linalg.norm(q[0:2]-b))<6.0:
+    return None
+  return q
+ def observe(self,tick,obs,pos,rpy):
+  if self.sess is None and not self._tried:
+   self._load()
+  rgb=obs.get('rgb') if hasattr(obs,'get') else None
+  if rgb is None:
+   return
+  sc=self.score(rgb)
+  if sc is None:
+   return
+  p,u,v,h=sc
+  if p<(RP_T if self.thr is None else self.thr) or h>self.hmax:
+   return
+  q=self.localise(u,v,obs['depth'],pos,rpy)
+  if q is None:
+   return
+  self.hit_t=tick; self.n_fix+=1
+  if self.latch is not None:
+   if float(np.linalg.norm(q[0:2]-self.latch[0:2]))<=6.0:
+    self.latch=(1.0-RP_EMA)*self.latch+RP_EMA*q
+   return
+  self.hits=[(t,z) for t,z in self.hits if tick-t<=400]+[(tick,q)]
+  if len(self.hits)>=RP_LATCH_N:
+   pts=np.asarray([z for _,z in self.hits[-RP_LATCH_N:]]); c=pts.mean(0)
+   if float(np.max(np.linalg.norm(pts[:,0:2]-c[0:2],axis=1)))<=RP_LATCH_TOL:
+    self.latch=c; self.near_since=None; self.n_latch+=1; self.latch_t=tick
+ def want_rgb(self,tick):
+  if self.sess is None and not self._tried:
+   self._load()
+  if self.sess is None or self.n_req>=self.cap or tick<RP_T0:
+   return False
+  chase=(tick-self.hit_t<=RP_CHASE_TICKS) and (tick-self.last_req>=RP_CHASE_MIN)
+  paced=(tick-self.last_req>=RP_EVERY)
+  if chase or paced:
+   self.n_req+=1; self.last_req=tick; return True
+  return False
+ def tick_end(self,tick,pos):
+  if self.latch is None:
+   return
+  if float(np.linalg.norm(self.latch[0:2]-pos[0:2]))<=RP_RING:
+   if self.near_since is None:
+    self.near_since=tick
+   elif tick-self.near_since>RP_DUD_TICKS:
+    self.bad.append(self.latch[0:2].copy()); self.latch=None; self.hits=[]; self.near_since=None; self.n_dud+=1
+  else:
+   self.near_since=None
+  if self.latch is not None and self.latch_t is not None and tick-self.latch_t>RP_TERM_MAX:
+   self.bad.append(self.latch[0:2].copy()); self.latch=None; self.hits=[]; self.near_since=None; self.n_dud+=1
+ def terminal(self,pos,agl_m):
+  if self.latch is None:
+   return None
+  off=self.latch[0:2]-pos[0:2]; d=float(np.linalg.norm(off))
+  if d>self.term_r:
+   return None
+  tz=float(self.latch[2])+RP_HOVER_UP; dz=tz-float(pos[2])
+  if dz<0 and agl_m<RP_AGL_MIN:
+   dz=0.3
+  dzc=max(-1.5,min(1.5,dz))
+  vec=np.array([off[0],off[1],dzc],np.float64); n=float(np.linalg.norm(vec))
+  dirn=vec/n if n>1e-6 else np.zeros(3)
+  if d<1.0 and abs(dz)<0.7:
+   speed=0.04
+  elif d<RP_RING:
+   speed=0.15
+  else:
+   speed=min(0.33,max(0.15,0.05*d+0.10))
+  return dirn.astype(np.float32),float(speed)
+def _dfeat(depth):
+ d=np.asarray(depth,np.float32)
+ if d.ndim==3 and d.shape[-1]==1:
+  d=d[...,0]
+ if d.ndim!=2:
+  d=np.reshape(d,d.shape[:2])
+ d=np.clip(d,0.0,1.0)
+ gx=np.abs(np.diff(d,axis=1))
+ gy=np.abs(np.diff(d,axis=0))
+ pc=np.percentile(d,[1,5,10,25,50,75,90,95,99])
+ v=[float(d.min()),float(d.mean()),float(d.std()),float(d.max())]
+ v += [float(p) for p in pc]
+ v += [float((d<=0.1).mean()),float((d<=0.25).mean()),float((d>=0.95).mean()),
+  float((d>=0.999).mean()),float((d<=0.001).mean()),
+  float(gx.mean()+gy.mean()),float(((gx>0.05).mean()+(gy>0.05).mean())/2.0)]
+ h,w=d.shape
+ tm,tn,tx=[],[],[]
+ for y0 in np.linspace(0,h,5,dtype=int)[:-1]:
+  y1=int(y0+h // 4)
+  for x0 in np.linspace(0,w,5,dtype=int)[:-1]:
+   x1=int(x0+w // 4)
+   t=d[y0:y1,x0:x1]
+   tm.append(float(t.mean())); tn.append(float(t.min())); tx.append(float(t.max()))
+ return v+tm+tn+tx
+class _Net:
+ def __init__(self,p):
+  b=open(p,'rb').read()
+  d,h=(int(x) for x in np.frombuffer(b[:4],np.uint16)); o=4
+  n1=d*h; n2=h*6
+  self.w1=np.frombuffer(b[o:o+n1],np.int8).reshape(d,h).astype(np.float32); o += n1
+  self.w2=np.frombuffer(b[o:o+n2],np.int8).reshape(h,6).astype(np.float32); o += n2
+  self.s1,self.s2=np.frombuffer(b[o:o+8],np.float32); o += 8
+  self.b1=np.frombuffer(b[o:o+2*h],np.float16).astype(np.float32); o += 2*h
+  self.b2=np.frombuffer(b[o:o+12],np.float16).astype(np.float32); o += 12
+  self.mu=np.frombuffer(b[o:o+2*d],np.float16).astype(np.float32); o += 2*d
+  self.sd=np.frombuffer(b[o:o+2*d],np.float16).astype(np.float32)
+  self.w1 *= self.s1; self.w2 *= self.s2
+ def probs(self,f):
+  x=(f-self.mu)/self.sd
+  hd=np.maximum(x@self.w1+self.b1,0)
+  z=hd@self.w2+self.b2
+  z -= z.max()
+  e=np.exp(z)
+  return e/e.sum()
+class _Cls:
+ def __init__(self):
+  self.net=_Net(_H/'typenet.bin')
+  self.reset()
+ def reset(self):
+  self.ps=np.zeros(6); self.n=0
+  self.latched=set(); self.is_mountain=False; self.p40=None; self.relatched=set()
+ def update(self,tick,state,depth):
+  if tick>600 or tick%5:
+   return
+  s=np.asarray(state,np.float32).reshape(-1)
+  sf=np.zeros(141,np.float32)
+  sf[:min(141,s.size)]=s[:141]
+  f=np.asarray([float(tick),float(tick)*SIM_DT]+sf.tolist()+_dfeat(depth),np.float32)
+  self.ps += self.net.probs(f); self.n += 1
+  avg=self.ps/self.n
+  if self.n==40:
+   self.p40=float(avg[2])
+  i=int(np.argmax(avg)); lab=LB[i]
+  bar=0.5 if lab=='warehouse' else 0.7
+  if self.n>=3 and avg[i]>=bar:
+   self.latched.add(lab)
+   if lab=='mountain':
+    self.is_mountain=True
+  if self.n>=40 and avg[4]>=0.15:
+   self.latched.add('warehouse')
+  if RL_ON and self.n>=RL_N and lab in RL_TYPES and avg[i]>=RL_BAR:
+   self.relatched.add(lab)
+ def settled(self,t):
+  return t in self.latched
+ def mtn_ok(self):
+  return bool(self.is_mountain and self.p40 is not None and self.p40>=MTN_THR)
+def _warm(rgb):
+ im=np.asarray(rgb,np.float32).reshape(256,256,3)[128:]
+ r,g,b=im[...,0],im[...,1],im[...,2]
+ return float(((r>g+0.03) & (g>=b)).mean())
+_BOX=np.array([25.0,30.0,30.0,25.0,12.0,20.0])
+CVR=9.0
+def _ccore(origin,pad,rpad=83.0,boxes=None):
+ xs=np.arange(-48.0,50.0,2.0)
+ X,Y=np.meshgrid(xs,xs)
+ pts=np.stack([X.ravel(),Y.ravel()],1)
+ dc=np.linalg.norm(pts-origin,axis=1)
+ dp=np.linalg.norm(pts-pad,axis=1)
+ m=(dc<=33.0)&(dp<=rpad)
+ pts,dc,dp=pts[m],dc[m],dp[m]
+ ax=np.abs(pts).max(1)
+ dens=np.zeros(len(pts))
+ bx=_BOX if boxes is None else boxes
+ for bb in bx:
+  dens[ax<=bb] += 1.0/(6.0*(2*bb) ** 2) if boxes is None else 1.0/(len(bx)*(2*bb) ** 2)
+ w=dens/(1+np.exp(-(30.0-dc)))/(1+np.exp(-((rpad-3.0)-dp)))
+ return pts,w,dc
+def _bous(core,lane,spacing,cap,pos):
+ core=np.asarray(core,np.float64)
+ if core.shape[0]<4:
+  return []
+ k=np.round(core[:,0]/lane).astype(int)
+ o=np.lexsort((np.where(k%2==0,core[:,1],-core[:,1]),k))
+ path=core[o]
+ sel=[path[0]]
+ for q in path[1:]:
+  if float(np.linalg.norm(q-sel[-1]))>=spacing:
+   sel.append(q)
+ w=sel[:cap]
+ if len(w)>=2 and np.linalg.norm(w[-1]-pos)<np.linalg.norm(w[0]-pos):
+  w=w[::-1]
+ return [np.asarray(x,np.float64) for x in w]
+def _wps(origin,pad,pos,lane,spacing,cap):
+ xs=np.arange(-48.0,50.0,2.0)
+ X,Y=np.meshgrid(xs,xs)
+ pts=np.stack([X.ravel(),Y.ravel()],1)
+ dc=np.linalg.norm(pts-origin,axis=1)
+ dp=np.linalg.norm(pts-pad,axis=1)
+ m=(dc<=33.0) & (dp<=83.0)
+ pts,dc,dp=pts[m],dc[m],dp[m]
+ ax=np.abs(pts).max(1)
+ dens=np.zeros(len(pts))
+ for bb in _BOX:
+  dens[ax<=bb] += 1.0/(6.0*(2*bb) ** 2)
+ w=dens/(1+np.exp(-(30.0-dc)))/(1+np.exp(-(80.0-dp)))
+ core=pts
+ if w.sum()>0:
+  o=np.argsort(-w)
+  cw=np.cumsum(w[o])/w.sum()
+  core=pts[o[:int(np.searchsorted(cw,0.9))+1]]
+ if core.shape[0]<4:
+  core=pts[dc<=30.0]
+ if not core.shape[0]:
+  return []
+ k=np.round(core[:,0]/lane).astype(int)
+ o=np.lexsort((np.where(k%2==0,core[:,1],-core[:,1]),k))
+ path=core[o]
+ sel=[path[0]]
+ for q in path[1:]:
+  if float(np.linalg.norm(q-sel[-1]))>=spacing:
+   sel.append(q)
+ w=sel[:cap]
+ if len(w)>=2 and np.linalg.norm(w[-1]-pos)<np.linalg.norm(w[0]-pos):
+  w=w[::-1]
+ return [np.asarray(x,np.float64) for x in w]
+class DroneFlightController:
+ def __init__(self,*,model_path=None,providers=None):
+  so=ort.SessionOptions()
+  so.intra_op_num_threads=2
+  so.inter_op_num_threads=1
+  so.execution_mode=ort.ExecutionMode.ORT_SEQUENTIAL
+  so.add_session_config_entry("session.intra_op.allow_spinning","0")
+  self.session=ort.InferenceSession(str(model_path or _H/'policy.onnx'),so,
+           providers=providers or ["CPUExecutionProvider"])
+  self._ms=next(int(i.shape[0]) for i in self.session.get_inputs()
+      if i.name=="memory_tensor")
+  self._in={i.name for i in self.session.get_inputs()}
+  self._cls=_Cls() if ON else None
+  self._rp=_RgbPrimary() if (ON and RP_ON) else None
+  self._r2=(_RgbPrimary(model='victim_rgb256.onnx',in_res=256,thr=R2_T,
+                        hmax=R2_HMAX,rng_max=R2_RANGE_MAX,term_r=R2_TERM_R,cap=R2_CAP)
+            if (ON and R2_ON) else None)
+  self._r2_on=False
+  self._esc=_Escape() if (ON and ESC_ON) else None
+  self.reset()
+ def reset(self):
+  self.memory_tensor=np.zeros(self._ms,np.float32)
+  self.tick=0
+  self._h={15: [],25: []}
+  self._pad=None; self._z0=None
+  self._on=False
+  self._cfg=None
+  self._w=None
+  self._i=0
+  self._adv=0
+  self._cv=None
+  self._cvt=0
+  self._av=0; self._av_side=1.0; self._av_n=0
+  self._stall=0; self._push=0; self._stall_n=0
+  self.route='king'
+  self._fg_on=0; self._fg_h=None; self._fg_spd=None; self._fg_n=0; self._fg_mem=None
+  self._sup=None; self._mass=None; self._w0=None
+  self._rp_term=None
+  self._mx_n=0; self._mx_used=0
+  self._p3_n=0; self._p3_ban=[]; self._p3_resets=0
+  self._ss=None; self._ss_k=0; self._ss_fr=[]; self._ss_hor=[]; self._ss_t=0; self._ss_head=None; self._ss_start=None; self._ss_z0=None; self._ss_yaw0=0.0; self._ss_hit=False; self._ss_sgn=-1.0; self._ss_diag=False
+  if self._rp is not None:
+   self._rp.reset()
+  if getattr(self,'_r2',None) is not None:
+   self._r2.reset()
+  self._r2_on=False
+  if self._esc is not None:
+   self._esc.reset()
+  if self._cls:
+   self._cls.reset()
+ def _vbuild(self,pos,clue,c):
+  if self._sup is None:
+   sup,w,dc=_ccore(pos[0:2]+clue,self._pad)
+   self._sup=sup; self._w0=w; self._mass=w.copy(); self._dc=dc
+  if FF_ON and self._stype() in FF_TYPES:
+   wps=[]
+   for fr in FF_FRACS:
+    wps=_bous(self._core(fr),c[3],c[4],10**6,pos[0:2])
+    if len(wps)<=c[5]:
+     break
+   wps=wps[:c[5]]
+  else:
+   wps=_bous(self._core(0.9),c[3],c[4],c[5],pos[0:2])
+  if not wps:
+   self._mass=self._w0.copy()
+   wps=_bous(self._core(0.9),c[3]*0.65,c[4]*0.7,c[5],pos[0:2])
+  if not wps:
+   wps=_bous(self._sup[self._dc<=30.0],c[3],c[4],c[5],pos[0:2])
+  if not wps and LADDER:
+   # Port of the cf_swarm_sar king (uid173) posterior relaxation ladder. Runs ONLY when every champion
+   # fallback produced no tour (start far from the clue: nothing within 33 m of the clue AND 83 m of the
+   # pad), so any seed that already forms a tour is untouched. Pad radius grows to reach the type box
+   # (max(80, dist(pad->box edge)+30) + 3 m margin), then drops the pad with the box x1.5, then clue only.
+   t=self._stype()
+   b=float(_BOX[LB.index(t)]) if t in LB else 30.0
+   dx=max(abs(float(self._pad[0]))-b,0.0); dy=max(abs(float(self._pad[1]))-b,0.0)
+   rp=max(80.0,float(np.hypot(dx,dy))+30.0)+3.0
+   for rpad,bx in ((rp,None),(1e9,[1.5*b]),(1e9,[1e3])):
+    sup,w,dc=_ccore(pos[0:2]+clue,self._pad,rpad,bx)
+    if int((w>0).sum())>=4:
+     self._sup=sup; self._w0=w; self._mass=w.copy(); self._dc=dc; self._ladder=1
+     wps=_bous(self._core(0.9),c[3],c[4],c[5],pos[0:2])
+     if wps:
+      break
+  return wps
+ def _core(self,frac):
+  w=self._mass; t=float(w.sum())
+  if t<=0:
+   return np.zeros((0,2))
+  o=np.argsort(-w)
+  cw=np.cumsum(w[o])/t
+  return self._sup[o[:int(np.searchsorted(cw,frac))+1]]
+ def _swept(self,xy):
+  if self._mass is not None:
+   self._mass[np.linalg.norm(self._sup-np.asarray(xy,np.float64),axis=1)<=CVR]=0.0
+ def _stype(self):
+  c=self._cls
+  if c.is_mountain:
+   return 'mountain' if 'mountain' in TYPES else None
+  if RL_ON and c.relatched and not (getattr(self,'_z0',None) is not None and self._z0<=WESC_Z):
+   cands=[t for t in TYPES if t!='mountain' and (c.settled(t) or t in c.relatched)]
+   if cands:
+    avg=c.ps/max(c.n,1)
+    return max(cands,key=lambda t: float(avg[LB.index(t)]))
+  for t in TYPES:
+   if t!='mountain' and c.settled(t):
+    return t
+  return None
+
+ def _r2_type(self):
+  c=self._cls
+  if c is None or c.is_mountain or c.n<=0:
+   return None
+  avg=c.ps/max(c.n,1)
+  i=int(np.argmax(avg)); lab=LB[i]
+  if lab not in R2_TYPES:
+   return None
+  if not (c.settled(lab) or (RL_ON and lab in c.relatched)):
+   return None
+  return lab if float(avg[i])>=R2_BAR else None
+ def _r2_ok(self):
+  return bool(self._r2 is not None and self._r2_type() is not None)
+ def _champ(self):
+  """True on village/warehouse: bypass every added subsystem and run the champion's
+  process end to end. Mountain wins the tie (is_mountain is sticky and set first)."""
+  if not CHAMP_ROUTE:
+   return False
+  c=self._cls
+  if c is None or c.is_mountain:
+   return False
+  return bool(c.settled('village') or c.settled('warehouse'))
+ def act(self,observation):
+  self.tick += 1
+  rq=False
+  if self.route.endswith('+p3r'): self.route=self.route[:-4]
+  if self.route.endswith('+av'): self.route=self.route[:-3]
+  if self.route.endswith('+fg'): self.route=self.route[:-3]
+  st=np.asarray(observation["state"],np.float32).reshape(-1).copy()
+  if ON and self._cls:
+   pos=st[0:3].astype(np.float64)
+   if self._pad is None:
+    self._pad=pos[0:2].copy(); self._z0=float(pos[2])
+    if MTN_Z0>0.0 and self._z0>=MTN_Z0:
+     self._cls.is_mountain=True
+   self._cls.update(self.tick,st,np.asarray(observation["depth"],np.float32))
+   for pd,hs in self._h.items():
+    if self.tick%pd==0:
+     hs.append(pos[0:2].copy())
+     if len(hs)>20:
+      hs.pop(0)
+   if not self._on:
+    t=self._stype()
+    c=CFG.get(t) if t else None
+    if t=='mountain' and self._cls.mtn_ok() and not self._champ():
+     c=MTN_STRONG
+    if c and self.tick>=c[0]:
+     hs=self._h[c[1]]
+     if len(hs)>=20:
+      hp=np.asarray(hs)
+      if float(np.max(np.linalg.norm(hp-hp[0],axis=1)))<c[2]:
+       if c[8] and self._cv!='ok':
+        if self._cv!='block':
+         rgb=observation.get('rgb') if hasattr(observation,'get') else None
+         fr=np.asarray(rgb,np.float32) if rgb is not None else None
+         if fr is not None and float(fr.max())>0.01:
+          self._cv='block' if _warm(fr)>=VW else 'ok'
+          if self._cv=='ok':
+           self._on=True; self._cfg=c
+         elif self._cvt<3:
+          rq=True; self._cv='req'; self._cvt += 1
+       else:
+        self._on=True; self._cfg=c
+   if self._on:
+    c=self._cfg
+    if self._w is None:
+     if len(c)>9:
+      self._w=self._vbuild(pos,st[-2:].astype(np.float64),c)
+     else:
+      self._w=_wps(pos[0:2]+st[-2:].astype(np.float64),self._pad,
+        pos[0:2],c[3],c[4],c[5])
+     self._i=0; self._adv=self.tick
+    if len(self._w):
+     self._i=min(self._i,len(self._w)-1)
+     wp=self._w[self._i]
+     if float(np.linalg.norm(wp-pos[0:2]))<c[7] or self.tick-self._adv>c[6]:
+      if len(c)>9:
+       self._swept(wp)
+      nx=self._i+1
+      if nx>=len(self._w):
+       if len(c)>9:
+        rb=self._vbuild(pos,st[-2:].astype(np.float64),c)
+        if rb:
+         self._w=rb
+       nx=0
+      self._i=nx
+      self._adv=self.tick
+      wp=self._w[self._i]
+     off=wp-pos[0:2]
+     if STALL_N>0 and self._stype() in STALL_TYPES and (self._rp is None or self._rp.latch is None):
+      _vh=float(np.hypot(float(st[6]),float(st[7])))
+      self._stall=self._stall+1 if _vh<STALL_V else 0
+      if self._stall>=STALL_N:
+       if self._push==0:
+        self._stall_n+=1
+       self._push=STALL_HOLD; self._stall=0
+      if self._push>0:
+       self._push-=1
+       j=self._i
+       while j+1<len(self._w) and float(np.linalg.norm(self._w[j]-pos[0:2]))<STALL_LOOK:
+        j+=1
+       if j!=self._i:
+        self._i=j; self._adv=self.tick
+       off=self._w[j]-pos[0:2]; _n=float(np.linalg.norm(off))
+       if 1e-6<_n<STALL_LOOK:
+        off=off*(STALL_LOOK/_n)
+       self._stall_on=True
+     bl=c[9] if len(c)>9 else 1.0
+     if bl<1.0:
+      off=bl*off+(1.0-bl)*st[-2:].astype(np.float64)
+     st[-2]=np.float32(off[0]); st[-1]=np.float32(off[1])
+     self.route='king+tour+stall' if getattr(self,'_stall_on',False) else 'king+tour'
+     self._stall_on=False
+   self._rp_term=None
+   if self._rp is not None and not self._champ():
+    try:
+     if self._rp.clue0 is None:
+      self._rp.clue0=pos[0:2]+np.asarray(observation['state'],np.float32).reshape(-1)[-2:].astype(np.float64)
+     if self._cls.mtn_ok():
+      self._rp.observe(self.tick,observation,pos,st[3:6].astype(np.float64))
+      if self._rp.latch is not None:
+       lk=self._rp.latch[0:2]-pos[0:2]; st[-2]=np.float32(lk[0]); st[-1]=np.float32(lk[1]); self.route='king+rgb'
+       self._rp_term=self._rp.terminal(pos,float(st[162])*20.0 if st.size>162 else 20.0)
+      self._rp.tick_end(self.tick,pos)
+    except Exception:
+     self._rp_term=None
+   self._r2_on=False; self._r2_term=None
+   if self._r2 is not None:
+    try:
+     if not self._r2_ok():
+      raise _R2Off
+     self._r2_on=True
+     if self._r2.clue0 is None:
+      self._r2.clue0=pos[0:2]+np.asarray(observation['state'],np.float32).reshape(-1)[-2:].astype(np.float64)
+     self._r2.observe(self.tick,observation,pos,st[3:6].astype(np.float64))
+     if self._r2.latch is not None:
+      lk=self._r2.latch[0:2]-pos[0:2]; st[-2]=np.float32(lk[0]); st[-1]=np.float32(lk[1]); self.route='king+r2'
+      if R2_TERM_R>0.0 and self._r2_type() in R2_TERM_TYPES:
+       _mm=np.asarray(self.memory_tensor,np.float32).reshape(-1); _ph=float(_mm[0]) if _mm.size else 1.0
+       _lt=getattr(self._r2,'latch_t',None)
+       if (not R2_TERM_P1 or 0.5<=_ph<1.5) and (_lt is None or self.tick-_lt>=R2_TERM_WAIT):
+        self._r2_term=self._r2.terminal(pos,float(st[162])*20.0 if st.size>162 else 20.0)
+     self._r2.tick_end(self.tick,pos)
+    except _R2Off:
+     pass
+    except Exception:
+     self._r2_on=False
+  if AV_D>0.0 and self._cls and self.tick>=AV_T0 and self._stype() in AV_TYPES:
+   dm=np.asarray(observation['depth'],np.float32).reshape(256,256)*29.5+0.5
+   ctr=float(dm[96:160,96:160].min())
+   if ctr<AV_D:
+    if self._av==0:
+     self._av_side=1.0 if float(dm[64:192,128:224].min())>=float(dm[64:192,32:128].min()) else -1.0
+     self._av_n+=1
+    self._av=AV_HOLD
+   elif ctr>AV_D+AV_REL and self._av>0:
+    self._av-=1
+   if self._av>0:
+    ang=-self._av_side*np.radians(AV_ROT)
+    cx,cy=float(st[-2]),float(st[-1]); ca,sa=float(np.cos(ang)),float(np.sin(ang))
+    st[-2]=np.float32(ca*cx-sa*cy); st[-1]=np.float32(sa*cx+ca*cy)
+    if not self.route.endswith('+av'): self.route=self.route+'+av'
+  if MX_ON and self._cls is not None:
+   try:
+    mm=np.asarray(self.memory_tensor,np.float32).reshape(-1)
+    if mm.size>=63:
+     if mm[59]<0.5:
+      self._mx_n=0
+     elif mm[57]>0.5 and mm[59]>=MX_AT and self._mx_n<MX_EXT and (
+       ('warehouse' in MX_TYPES and getattr(self,'_z0',None) is not None and self._z0<=WESC_Z) or
+       ((getattr(self,'_z0',None) is None or self._z0>WESC_Z) and self._stype() in MX_TYPES)):
+      mm=mm.copy(); mm[59]=np.float32(MX_AT); self._mx_n+=1; self._mx_used+=1
+      self.memory_tensor=mm.reshape(self._ms)
+   except Exception:
+    pass
+  if P3_ON:
+   try:
+    mm=np.asarray(self.memory_tensor,np.float32).reshape(-1)
+    if mm.size>=63:
+     rs=False
+     if mm[0]>=2.5:
+      self._p3_n+=1
+      if self._p3_n>P3_T:
+       self._p3_ban.append(np.asarray(mm[60:62],np.float64).copy()); rs=True
+     else:
+      self._p3_n=0
+     if not rs and self._p3_ban and mm[0]>=1.5 and mm[57]>0.5:
+      e=np.asarray(mm[60:62],np.float64)
+      if any(float(np.linalg.norm(e-b))<P3_BAN_R for b in self._p3_ban): rs=True
+     if rs:
+      mm=mm.copy(); mm[0]=1.0; mm[56]=0.0; mm[57]=0.0; mm[58]=0.0; mm[59]=0.0
+      self.memory_tensor=mm.reshape(self._ms); self._p3_n=0; self._p3_resets+=1; self.route=self.route+'+p3r'
+   except Exception:
+    pass
+  feed={"depth": np.asarray(observation["depth"],np.float32).reshape(256,256,1),
+    "state": st,"memory_tensor": self.memory_tensor}
+  if "rgb" in self._in:
+   rgb=observation.get("rgb") if hasattr(observation,"get") else None
+   feed["rgb"]=(np.asarray(rgb,np.float32).reshape(256,256,3)
+      if rgb is not None else np.zeros((256,256,3),np.float32))
+  self._fg_mem=np.asarray(self.memory_tensor,np.float32).reshape(-1).copy()
+  a,m=self.session.run(["action","memory_tensor_out"],feed)
+  self.memory_tensor=np.asarray(m,np.float32).reshape(self._ms)
+  out=np.asarray(a,np.float32).reshape(-1)
+  if rq and out.shape[0]>=6:
+   out=out.copy(); out[5]=1.0
+  if self._esc is not None and out.shape[0]>=4 and (self._esc.mode=='ceil' or not self._champ()):
+   try:
+    _p=st[0:3].astype(np.float64); _agl=float(st[162])*20.0 if st.size>162 else 20.0
+    if self.tick==1:
+     if not (WESC_ON and self._esc.ceiling(observation['depth'],_p,float(st[5]))):
+      self._esc.decide(observation['depth'],_p,float(st[5]))
+    _eok=True
+    if ESC_TERR and self._esc.mode!='ceil':
+     _c2=self._cls
+     _eok=bool(_c2 is not None and (_c2.is_mountain or _c2.settled('forest')))
+    if _eok and self._esc.phase in ('scan','creep','climb'):
+     _e=self._esc.act(observation['depth'],_p,_agl,math.degrees(float(st[4])),float(st[5]))
+     if _e is not None:
+      out=out.copy(); out[0:3]=_e[0]; out[3]=np.float32(_e[1]); out[4]=np.float32(0.0 if _e[2] is None else _e[2])
+      if self._esc.mode=='ceil': self.route='king+wesc'
+   except Exception:
+    pass
+  if SS_ON and out.shape[0]>=5:
+   try:
+    _o=self._sscan(observation,st,out)
+    if _o is not None:
+     return _o
+   except Exception:
+    self._ss='done'
+  if self._rp is not None and out.shape[0]>=6 and self._cls is not None and self._cls.mtn_ok() and not self._champ():
+   out=out.copy()
+   if self._rp_term is not None:
+    out[0:3]=self._rp_term[0]; out[3]=np.float32(self._rp_term[1]); out[4]=np.float32(0.0)
+   if self._rp.want_rgb(self.tick):
+    out[5]=np.float32(1.0)
+  if self._r2 is not None and out.shape[0]>=6 and self._r2_on:
+   if getattr(self,'_r2_term',None) is not None:
+    _use=True; _spd=float(self._r2_term[1]); _yt=0.0; _dirv=np.asarray(self._r2_term[0],np.float32).copy()
+    try:
+     if R2_FACE and self._r2_type() in R2_FACE_TYPES and self._r2.latch is not None:
+      _lx=float(self._r2.latch[0])-float(st[0]); _ly=float(self._r2.latch[1])-float(st[1]); _dh=math.hypot(_lx,_ly)
+      if _dh>1.0:
+       _hd=math.atan2(_ly,_lx); _yt=_hd
+       if abs(_wrap(_hd-float(st[5])))>math.radians(30.0):
+        _spd=min(_spd,0.03)
+       else:
+        _dm=np.asarray(observation['depth'],np.float32).reshape(256,256)*29.5+0.5
+        if float(_dm[110:146,112:144].min())<min(_dh,R2_FACE_CLR): _use=False
+      else:
+       _yt=float(st[5])
+    except Exception:
+     _use=True; _spd=float(self._r2_term[1]); _yt=0.0
+    if _use:
+     out=out.copy(); out[0:3]=_dirv; out[3]=np.float32(_spd); out[4]=np.float32(_wrap(_yt)/math.pi if _yt!=0.0 else 0.0)
+     if not self.route.endswith('+r2t'): self.route=self.route+'+r2t'
+   if self._r2.want_rgb(self.tick):
+    out=out.copy(); out[5]=np.float32(1.0)
+  if FG_ON and self._cls is not None and out.shape[0]>=4 and self._fg_mem is not None and self._stype()=='forest':
+   try:
+    out=self._fguard(observation,st,out)
+   except Exception:
+    self._fg_on=0; self._fg_h=None
+  return out
+ def _sscan(self,obs,st,out):
+  z=float(st[2]); yaw=float(st[5])
+  if self._ss is None:
+   if self.tick!=1 or z>SS_Z or (self._esc is not None and self._esc.mode=='ceil'):
+    self._ss='off'; return None
+   self._ss='scan'; self._ss_z0=z; self._ss_yaw0=yaw; self._ss_t=0
+   f0,h0=_ss_frac(obs['depth']); self._ss_fr=[f0]; self._ss_hor=[h0]
+   _c=_wrap(float(out[4])*math.pi-yaw); self._ss_sgn=1.0 if _c>1e-4 else -1.0
+  if self._ss in ('off','done'):
+   if self.route=='king+ss': self.route='king'
+   return None
+  self._ss_t+=1
+  if self._ss_t>SS_MAXT:
+   self._ss='done'; self.route='king'; return None
+  o=out.copy(); o[5]=np.float32(0.0)
+  zt=self._ss_z0+SS_LIFT; vz=float(np.clip(2.0*(zt-z),-SS_VZ,SS_VZ))
+  def _cmd(dirv,spd,hd):
+   o[0:3]=np.asarray(dirv,np.float32); o[3]=np.float32(spd); o[4]=np.float32(_wrap(hd)/math.pi); self.route='king+ss'; return o
+  side=self._ss_yaw0+self._ss_sgn*math.radians(SS_SIDE)
+  if self._ss=='scan':
+   air=z>self._ss_z0+0.04
+   if air and z>self._ss_z0+0.08 and abs(_wrap(yaw-side))<math.radians(6.0):
+    f,hz=_ss_frac(obs['depth']); self._ss_fr.append(f); self._ss_hor.append(hz); tp=_ss_top(obs['depth'])
+    if not self._ss_diag:
+     self._ss_diag=True; self._ss_fr.pop(); self._ss_hor.pop()
+     o[0:3]=np.asarray([0.0,0.0,1.0 if vz>=0 else -1.0],np.float32); o[3]=np.float32(abs(vz)/3.0); o[4]=np.float32(_wrap(side)/math.pi)
+     self.route='ssm%+d_%02d_%03d_%03d'%(int(self._ss_sgn),min(99,int(self._ss_fr[0]*100)),min(999,int(tp*100)),min(999,int(hz*100))); return o
+    if tp<=SS_TOP and hz<SS_HMAX:
+     self._ss_head=self._ss_yaw0+(math.pi if self._ss_fr[0]>SS_F0 else 0.0)
+     self._ss='out'; self._ss_hit=True; self._ss_start=st[0:2].astype(np.float64).copy()
+    else:
+     self._ss='done'; self.route='king'; return None
+   else:
+    return _cmd([0.0,0.0,1.0 if vz>=0 else -1.0],abs(vz)/3.0,side if air else yaw)
+  if self._ss=='out':
+   trav=float(np.linalg.norm(st[0:2].astype(np.float64)-self._ss_start))
+   if trav>=SS_OUT:
+    self._ss='done'; self.route='king'; return None
+   h=self._ss_head; dv=np.array([math.cos(h),math.sin(h),0.4*vz],np.float32); dv/=float(np.linalg.norm(dv))
+   return _cmd(dv,SS_OUT_V/3.0,yaw)
+  self._ss='done'; self.route='king'; return None
+ def _fguard(self,obs,st,out):
+  m=self._fg_mem
+  if int(round(float(m[0]))) not in FG_PH:
+   self._fg_on=0; self._fg_h=None; self._fg_spd=None; return out
+  pos=st[0:3].astype(np.float64); rel=m[8:11].astype(np.float64)-pos; dh=float(np.hypot(rel[0],rel[1]))
+  vel=st[6:9].astype(np.float64)
+  if dh<FG_MINH:
+   self._fg_on=0; self._fg_h=None; self._fg_spd=None; return out
+  yaw=float(st[5])
+  if abs(float(st[3]))>math.radians(FG_TILT) or abs(float(st[4]))>math.radians(FG_TILT):
+   self._fg_h=None; return out
+  bt=math.atan2(math.sin(math.atan2(rel[1],rel[0])-yaw),math.cos(math.atan2(rel[1],rel[0])-yaw))
+  if abs(bt)>math.radians(FG_MAXB):
+   self._fg_on=0; self._fg_h=None; self._fg_spd=None; return out
+  dm=np.asarray(obs['depth'],np.float32).reshape(256,256)*29.5+0.5
+  col=dm[128-FG_ROWS:128+FG_ROWS].min(axis=0)
+  def cix(b):
+   return int(round((1.0-math.tan(b))*128.0-0.5))
+  def free(c,need):
+   w=int(math.ceil(128.0*FG_W/max(need,0.5)))
+   lo,hi=c-w,c+w+1
+   if lo<0 or hi>256: return False
+   return bool(col[lo:hi].min()>=need)
+  need_t=min(dh-0.3,FG_D)
+  blocked=not free(cix(bt),need_t)
+  if blocked:
+   if self._fg_on==0: self._fg_n+=1
+   self._fg_on=FG_HOLD
+  elif self._fg_on>0:
+   self._fg_on-=1
+  if self._fg_on<=0:
+   self._fg_h=None; self._fg_spd=None; return out
+  out=out.copy()
+  need2=min(dh,FG_D2)
+  best=None
+  for k in range(0,int(FG_MAXB)+1,2):
+   for sg in ((1,-1) if k else (1,)):
+    b=bt+sg*math.radians(k)
+    if abs(b)>math.radians(FG_MAXB): continue
+    if free(cix(b),need2):
+     best=b; break
+   if best is not None: break
+  sp=float(np.linalg.norm(vel))/3.0
+  if self._fg_spd is None: self._fg_spd=min(1.0,sp)
+  if best is None:
+   cap=0.05; hwant=self._fg_h if self._fg_h is not None else math.atan2(vel[1],vel[0]) if sp>0.05 else yaw
+  else:
+   cap=FG_V/3.0; hwant=yaw+best
+  hcur=self._fg_h if self._fg_h is not None else (math.atan2(float(out[1]),float(out[0])) if abs(float(out[0]))+abs(float(out[1]))>1e-6 else yaw)
+  dhd=math.atan2(math.sin(hwant-hcur),math.cos(hwant-hcur)); lim=min(math.radians(FG_TURN),FG_ALAT/max(float(np.linalg.norm(vel[0:2])),0.5)/50.0)
+  hnew=hcur+max(-lim,min(lim,dhd)); self._fg_h=hnew
+  k=float(np.hypot(float(out[0]),float(out[1])))
+  v=np.array([math.cos(hnew)*max(k,0.3),math.sin(hnew)*max(k,0.3),float(out[2])])
+  v=v/max(float(np.linalg.norm(v)),1e-6)
+  self._fg_spd=max(min(float(out[3]),cap),self._fg_spd-FG_DN) if float(out[3])>cap else float(out[3])
+  self._fg_spd=min(self._fg_spd,float(out[3]))
+  out[0:3]=v.astype(np.float32); out[3]=np.float32(self._fg_spd)
+  if not self.route.endswith('+fg'): self.route=self.route+'+fg'
+  return out
+
+# r20
