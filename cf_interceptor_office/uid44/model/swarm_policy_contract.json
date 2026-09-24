@@ -1,0 +1,73 @@
+{
+  "contract_version": "policy_contract.v1",
+  "family_id": "cf_interceptor_office",
+  "interface_version": "submission_zip.v1",
+  "entry_point": {
+    "module": "drone_agent",
+    "class_name": "DroneFlightController",
+    "act_method": "act",
+    "reset_method": "reset"
+  },
+  "observation_space": {
+    "type": "dict",
+    "required_keys": [
+      "rgb",
+      "state"
+    ],
+    "fields": {
+      "rgb": {
+        "type": "tensor",
+        "dtype": "float32",
+        "shape": [
+          256,
+          256,
+          3
+        ],
+        "minimum": 0.0,
+        "maximum": 1.0
+      },
+      "state": {
+        "type": "tensor",
+        "dtype": "float32",
+        "shape": [
+          "dynamic"
+        ],
+        "rank": 1,
+        "minimum_length": 16,
+        "semantic_channels": [
+          "attitude_pitch_roll_sincos_yaw",
+          "body_velocity_xyz",
+          "body_acceleration_xyz",
+          "altitude_tof_height_baro_age_valid",
+          "detection_n_age_boxes2x5",
+          "action_history"
+        ]
+      }
+    }
+  },
+  "action_space": {
+    "type": "tensor",
+    "dtype": "float32",
+    "shape": [
+      4
+    ],
+    "component_names": [
+      "lr",
+      "fb",
+      "ud",
+      "yaw"
+    ],
+    "lower_bound": [
+      -1.0,
+      -1.0,
+      -1.0,
+      -1.0
+    ],
+    "upper_bound": [
+      1.0,
+      1.0,
+      1.0,
+      1.0
+    ]
+  }
+}
