@@ -1,0 +1,16 @@
+{
+  "file": "models/vdd01_full.onnx",
+  "md5": "9607bae61efd05511217c9be498ef000",
+  "params": 206820,
+  "trained": "from scratch (random init), train_vdd.py --folds full --epochs 16 --steps_ep 1000 --bs 96 --far_boost 2; data = rr_seg (VDR_RRFIX) + render_vdr shards (seeds 9.1M-10M), depth slot only",
+  "input": {"name": "depth", "shape": [256, 256, 1], "dtype": "float32", "meaning": "obs['depth'] exactly as delivered (normalised [0,1], metric = 0.5 + 29.5 d)"},
+  "outputs": {"heat": "[64,64] sigmoid, stride 4, UPRIGHT victim cells", "off": "[2,64,64] sub-cell centroid offset", "mask": "[128,128] logits, stride 2"},
+  "cadence": "every 5th tick (10 Hz), after take-off",
+  "thr": 0.85,
+  "thr_note": "chosen on 100 val flights (vddval100_95281102): 0 false-cluster events, upright recall 25-35 m 0.950 per eval",
+  "post": "vdd_post.fires(heat, mask, depth[...,0], pos=state[0:3], rpy=state[3:6], thr, fov_deg) -> fires with x, y, top; 3x3 NMS, <= 4 per frame",
+  "localise_rule": {"MLOG": 2.0, "WIN": 12, "BLO": 0.4, "BHI": 0.6, "GROW": 4, "GSTEP": 0.3, "BACK": 0.15, "ZBIAS": 0.0},
+  "fov": "fov_est.estimate_joint over post-take-off frames (checkpoints 20/40/80 frames = 2/4/8 s; nominal 90 before the first); |err| median 0.08 deg, p90 0.17 deg on 100 val flights",
+  "trigger_rule": "fires from >= 2 distinct evaluations within 2 m among the last 5 evaluations; trigger xy = mean of the cluster fires, top = MEDIAN of the cluster fires' tops",
+  "classes": "trained on upright victims only; low-profile victims (chars 27/29) were ignored in the loss, so low-profile recall is low (it is not a low-profile detector)"
+}

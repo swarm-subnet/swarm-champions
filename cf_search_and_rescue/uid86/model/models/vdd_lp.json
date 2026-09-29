@@ -1,0 +1,131 @@
+{
+ "file": "models/vdd_lp.onnx",
+ "md5": "92581fb4758d7fffb9fa089e8978ea13",
+ "params_onnx": 203940,
+ "params_train": 203940,
+ "macs": 241565696,
+ "arch": "base",
+ "norm": "none",
+ "trained": "train_vdet.py --arch base --bs 128 --epochs 8 --far_loss 1.0 --far_sample 2.0 --heat_target cover --init_onnx vdd01_full.onnx --kd_w 1.0 --lp_loss 1.0 --lp_sample 2.0 --lr 0.0003 --min_px 3 --neg_frac 0.25 --norm none --ring 0.8 --steps 1000",
+ "epoch": 7,
+ "step": 8000,
+ "ema": true,
+ "input": {
+  "name": "depth",
+  "shape": [
+   256,
+   256,
+   1
+  ],
+  "dtype": "float32",
+  "meaning": "obs['depth'] exactly as delivered (normalised [0,1], metric = 0.5 + 29.5 d)"
+ },
+ "outputs": {
+  "heat": "[64,64] sigmoid, stride 4, upright AND low-profile victim cells",
+  "off": "[2,64,64] sub-cell offset (unused at runtime)",
+  "mask": "[128,128] logits, stride 2"
+ },
+ "val_image_space": {
+  "n": 12210,
+  "n_vis": 6029,
+  "n_lp": 2260,
+  "op_thr": 0.8,
+  "score": 0.31018597949583915,
+  "mask_rec2": {
+   "up": 0.9316661684477991,
+   "lp": 0.5106685944619699
+  },
+  "mask_fp2_near": 0.001350429788650287,
+  "score_default": 0.6348462399469114,
+  "sel": {
+   "feasible": true,
+   "thr": 0.8,
+   "up": 0.9604669673653489,
+   "fp": 0.0005733005733005733,
+   "lp": 0.3101769911504425,
+   "lp1230": 0.3092255125284738,
+   "up_min": 0.9456911647651897,
+   "fp_cap": 0.0011056511056511055,
+   "ref_up": 0.9556911647651897,
+   "ref_fp": 0.0007371007371007371,
+   "ref_lp1230": 0.05808656036446469,
+   "ref_lp": 0.08495575221238938,
+   "bins_up": [
+    0.9811320754716981,
+    1.0,
+    0.9916666666666667,
+    0.978,
+    0.9786628733997155,
+    0.9694749694749695,
+    0.9545454545454546,
+    0.9260869565217391,
+    0.8611111111111112
+   ],
+   "bins_lp": [
+    0.6333333333333333,
+    0.5647058823529412,
+    0.5631067961165048,
+    0.4423076923076923,
+    0.3731656184486373,
+    0.2684310018903592,
+    0.19406392694063926,
+    0.14285714285714285,
+    0.04
+   ]
+  }
+ },
+ "thr_suggest_image_space": 0.8,
+ "thr_note": "recalibrate on kdump/val flights with eval_vdet.py (0 false clusters, ~0.001 fires/frame) before use",
+ "post": "vdd_post.fires (UID 47, unchanged)",
+ "check": {
+  "ok": true,
+  "problems": [],
+  "ir": 8,
+  "opset": {
+   "ai.onnx": 17
+  },
+  "ops": [
+   "Add",
+   "Clip",
+   "Concat",
+   "Constant",
+   "Conv",
+   "Div",
+   "Gather",
+   "Log",
+   "Mul",
+   "Relu",
+   "Resize",
+   "Sigmoid",
+   "Transpose",
+   "Unsqueeze"
+  ],
+  "lat_ms": {
+   "model": [
+    6.64,
+    6.62
+   ],
+   "ref": [
+    6.65,
+    6.63
+   ]
+  }
+ },
+ "parity_max_abs": [
+  2.7507543563842773e-05,
+  7.454678416252136e-05,
+  0.0016918182373046875
+ ],
+ "parity_tol": [
+  0.0001,
+  0.0004718695640563965,
+  0.0125818359375
+ ],
+ "parity_vs_folded": [
+  2.7507543563842773e-05,
+  7.454678416252136e-05,
+  0.0016918182373046875
+ ],
+ "parity_mask2_flips": 0,
+ "parity_ok": true
+}
