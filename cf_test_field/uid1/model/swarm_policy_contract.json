@@ -1,0 +1,202 @@
+{
+  "contract_version": "policy_contract.v1",
+  "family_id": "cf_test_field",
+  "interface_version": "submission_zip.v1",
+  "entry_point": {
+    "module": "drone_agent",
+    "class_name": "DroneFlightController",
+    "act_method": "act",
+    "reset_method": "reset"
+  },
+  "observation_space": {
+    "type": "dict",
+    "required_keys": [
+      "rgb",
+      "site_map",
+      "state",
+      "thermal",
+      "zoom"
+    ],
+    "fields": {
+      "rgb": {
+        "type": "tensor",
+        "dtype": "float32",
+        "shape": [
+          480,
+          640,
+          3
+        ],
+        "minimum": 0.0,
+        "maximum": 1.0
+      },
+      "thermal": {
+        "type": "tensor",
+        "dtype": "float32",
+        "shape": [
+          512,
+          640,
+          1
+        ],
+        "minimum": 0.0,
+        "maximum": 1.0
+      },
+      "zoom": {
+        "type": "tensor",
+        "dtype": "float32",
+        "shape": [
+          480,
+          640,
+          3
+        ],
+        "minimum": 0.0,
+        "maximum": 1.0
+      },
+      "state": {
+        "type": "tensor",
+        "dtype": "float32",
+        "shape": [
+          31
+        ],
+        "rank": 1,
+        "minimum_length": 31,
+        "semantic_channels": [
+          "position_m",
+          "heading_deg",
+          "velocity_mps",
+          "height_above_takeoff_m",
+          "gimbal_tilt_deg",
+          "time_left_s",
+          "battery_pct",
+          "wind_estimate_mps",
+          "wind_estimate_sector",
+          "dock_wind_mps",
+          "laser_range_m",
+          "laser_point_m",
+          "laser_status",
+          "ground_distance_m",
+          "downward_sensing_ok",
+          "flight_limit_distance_m",
+          "inside_flight_limit",
+          "flight_phase",
+          "camera_feed",
+          "frame_age_s",
+          "night_mode",
+          "night_vision",
+          "zoom_lens",
+          "zoom_age_s",
+          "zooms_left"
+        ]
+      },
+      "site_map": {
+        "type": "tensor",
+        "dtype": "float32",
+        "shape": [
+          660
+        ],
+        "rank": 1,
+        "minimum_length": 660,
+        "semantic_channels": [
+          "fence_count",
+          "fence_xy",
+          "limit_count",
+          "limit_xy",
+          "table_count",
+          "tables",
+          "building_count",
+          "buildings"
+        ]
+      }
+    }
+  },
+  "action_space": {
+    "type": "tensor",
+    "dtype": "float32",
+    "shape": [
+      26
+    ],
+    "component_names": [
+      "move_forward",
+      "move_right",
+      "move_up",
+      "turn",
+      "gimbal_tilt",
+      "thermal",
+      "night_mode",
+      "night_vision",
+      "zoom",
+      "zoom_lens",
+      "zoom_cx",
+      "zoom_cy",
+      "zoom_w",
+      "zoom_h",
+      "report",
+      "report_class",
+      "report_image",
+      "report_cx",
+      "report_cy",
+      "report_w",
+      "report_h",
+      "take_off",
+      "return_home",
+      "cancel_return",
+      "report_east",
+      "report_north"
+    ],
+    "lower_bound": [
+      -1.0,
+      -1.0,
+      -1.0,
+      -1.0,
+      -1.0,
+      0.0,
+      0.0,
+      0.0,
+      0.0,
+      0.0,
+      0.0,
+      0.0,
+      0.0,
+      0.0,
+      0.0,
+      0.0,
+      0.0,
+      0.0,
+      0.0,
+      0.0,
+      0.0,
+      0.0,
+      0.0,
+      0.0,
+      -1.0,
+      -1.0
+    ],
+    "upper_bound": [
+      1.0,
+      1.0,
+      1.0,
+      1.0,
+      1.0,
+      1.0,
+      1.0,
+      1.0,
+      1.0,
+      1.0,
+      1.0,
+      1.0,
+      1.0,
+      1.0,
+      1.0,
+      1.0,
+      1.0,
+      1.0,
+      1.0,
+      1.0,
+      1.0,
+      1.0,
+      1.0,
+      1.0,
+      1.0,
+      1.0
+    ]
+  }
+}
