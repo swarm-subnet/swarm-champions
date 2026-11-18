@@ -4,4 +4,5 @@ Patrol of the real drone test field in Santa Coloma, Andorra, out of a drone doc
 
 | Crowned | UID | Score | Model | Archive |
 |---|---|---|---|---|
+| 2026-11-18 | 164 | 1.0000 | [aecfe49c](uid164/model/) | [submission.zip](https://github.com/swarm-subnet/swarm-champions/releases/tag/cf_test_field-uid164-aecfe49c) |
 | 2026-11-18 | 1 | 0.9844 | [b9c63d0d](uid1/model/) | [submission.zip](https://github.com/swarm-subnet/swarm-champions/releases/tag/cf_test_field-uid1-b9c63d0d) |
